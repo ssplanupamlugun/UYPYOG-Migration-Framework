@@ -1,0 +1,55 @@
+services:
+
+  postgres:
+    image: postgres:17
+    container_name: upyog-migration-postgres
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_DB: upyog_migration
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+
+    ports:
+      - "5433:5432"
+
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d upyog_migration"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    container_name: upyog-finance-migration
+    restart: unless-stopped
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+    ports:
+      - "8000:8000"
+
+    environment:
+      # PostgreSQL inside Docker network
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/upyog_migration
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+
+      # Finance service running on host machine
+      FINANCE_VOUCHER_CREATE_URL: http://host.docker.internal:9090/services/EGF/rest/voucher/_create
+
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+
+volumes:
+  postgres_data:
